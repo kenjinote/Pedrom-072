@@ -1,0 +1,403 @@
+	Les applications PedroM seront des fichiers kernels (extension '68kP') dont avec un header kernel avec quelques contraintes. En plus d'avoir le flag ReadOnly mis, la fonction '_main' est detourne :
+	
+IDENTIFICATION:
+	_main:
+		dc.l	$4E7581AF
+		dc.l	$6D0329BC
+
+GOOD:			
+	+ Possibilite d'utiliser les romcalls / ramcalls / bss / libraries comme en kernel.
+	+ Possibilite d'importer des libraries en RAM ou en APPS ! C'est transparent.
+	+ La section BSS pour les vars globales est autorisé.
+	+ Le bloc BSS possedera un numero d'handle FIXE. Lorsque l'application ne s'en sert pas, cet handle est de taille 2 octets. Sinon, il est de la taille de la section BSS.
+	
+BAD:	
+	+ Limite a 64K comme les programmes kernels !
+	+ Consomme un secteur entier quelque soit la taille utilisée.
+	+ Les vars globales avec le code sont interdites (forcement...), donc la librarie statique Tigcc ne marchera pas pour produire des applications (y'a des vars globales partout !). 
+	+ Pas de self modifying code (donc genlib ne marchera pas en APPS...)
+
+
+SCHEMA GENERAL D'UNE APPLICATION PEDROM:
+	
+	APPLICATION	->	(RAM)	Ressources	->	Vars globales
+	(FROM code)					->	Pointeurs vers libraries
+			->	(FROM)	Attributes	->	Nom complet de l'app
+							->	Version
+							->	Commandes consoles
+							->	Evenement
+							->	Libs Importation table
+							->	...
+			->	(FROM)	Certificate	->	Mot de passe
+							->	Nom utilisateur
+							->	...
+			->	(FROM)	Kernel		->	Export Table
+							->	Reloc Table
+							->	Ressource Size
+							->	PedroM Import Table
+							->	Commentaire
+							->	Flags (89, 92+, ...)
+
+ATTRIBUTES:
+	
+	Ce sont les donnees statiques de l'application, exportees par elle.
+	Elles sont differentes des exportations de fonctions kernels dans la mesure ou on n'a pas a definir tous les numeros de fonctions, mais seulement un sous-ensemble de celles-ci (Donc tres proche du format de commentaire _nostub, meme si c'est totalement incompatible).
+	Ce qui signifie que si on n'a pas d'icones, on ne l'exporte pas (Contrairement au format kernel qui obbligerait a l'exporter).
+	Chaque attribut possede un numero d'identification fixe.
+	PedroM se reserve les 32768 premiers attributs. Le reste est laisse au bon vouloir des programmeurs.
+	
+	TABLE:
+		+ Nom complet de l'app
+		+ Version (Long BYTE.BYTE.BYTE.BYTE).
+		+ Auteur.
+		+ Tableau des Commandes consoles.
+		+ Function Evenement
+		+ Libs Importation table (Interne).
+		+ Apps Dialogue.
+		+ Icone 20x20.
+		+ Main (Commande Console degenere a un portant le nom interne de l'application).
+		+ Fin de table
+		
+	Les attributs sont donc une table ordonnee de type Attribut.
+	La fin de la table est determinee par le caractere fin de table.
+	Ex:
+	Attributes:
+		dc.w	$0001,name-Attributes
+		dc.w	$0002,version-Attributes
+		dc.w	$0003,Event-Attributes
+		dc.w	$FFFF
+
+
+COMMANDE CONSOLE
+
+	On peut exporter plusieurs nouvelles commandes consoles :
+	
+	BEGIN_CONSOLE_EXT
+		ADD_COMMAND("if",if_cmd, if_help);
+		ADD_COMMAND("then", then_cmd, then_help);
+		...
+	END_CONSOLE_EXT
+
+	Chaque commande a besoin d'un nom, d'une fonction et de l'aide (affiche par 'help commande'). L'aide est juste une chaine de caractere.
+	
+	
+KERNEL EXPORT TABLE
+
+	Les programmes kernels peuvent bien sur importer les fonctions exportees des applications ! Tout comme le contraire. C'est un grand avantage.
+
+
+FUNCTION EVENT :
+
+	Format:
+	long	event(short id asm("d0"), long data asm("d1"));
+	
+	Fonction appellee dans certains circonstances par le systeme.
+	
+	Switch (id) :
+		+ Idle: Le systeme glande. Retourne 0.
+		+ Boot: Le systeme boote. Retourne 0.
+		+ Clean: Commande 'clean' appellée. Retourne 0.
+		+ CrashExit: L'application a declenche une operation illegale. Retourne 0.
+		+ StartProgram: Un programme va etre lance (data = HANDLE). Retourne l'HANDLE a execute.
+		+ EndProgram: Fin d'un programme. Retourne 0.
+		+ Shell ClrScr. Retourne 0.
+		+ Get Unkown RomCall Ptr. Retourne un ptr ou NULL.
+		+ Get Unkown RamCall Ptr. Retourne un ptr ou NULL.
+		+ Get Unkown Library Ptr. Retourne un ptr ou NULL.
+		+ Install Apps. 
+		+ Uninstall.
+		+ Une touche a ete appuye. Retourne le code de la touche.
+		+ Calc On / Off. Retourne 0
+		+ ViewFile (HANDLE , WINDOW *). Retourne 0 si echec, 1 si success.
+		+ NoticeInstall (AppId). Retourne 0.
+		+ MemoryNeeded. Libere autant de memoire que possible. Retourne 0.
+		+ Flags: Retourne la liste des evenements supportes.
+
+
+CERTIFICATE:
+
+	Les certificate d'une application sont les donnees dynamico-statiques.
+	En fait ce sont des donnees que l'on peut lire sans contrainte, mais avec un nombre
+	limite d'ecriture. Comme elles sont sauvees dans la partie non-utilisee d'une Application, elles sont conservees apres le reset.
+	Plus une application est grande, moins elle a de certificate libre.
+	
+	
+PEDROM EXPORTED FUNCTIONS:
+
+	_globals_struct *ropen(void);
+		Ouverture des ressources de l'application.
+		ie. reallocation de l'handle de la section BSS et importation des libraries.
+		Doit etre appelle a l'interieur de l'application.
+		Si les ressources sont deja ouvertes, ne fait juste que redeference le pointeur vers ces ressources.
+		
+	void	rclose(void);
+		Fermeture des ressources de l'application.
+
+	AppId	GetAppId(const char *internal_name asm("a0"));
+		Retourne l'AppId d'apres le nom interne (exemple: 'xwin').
+		Si on passe NULL, retourne l'AppId de soi meme.
+		
+	const char *GetAppInternalName(AppId id asm("a0"));
+		Retourne le nom interne de l'application à partir de son id.
+
+	EventId	GetBaseEvent(AppId id asm("a0"));
+		Possibilite d'envoyer des events perso (>$8000)
+		Reservation automatique de 256 evenements pour chaque app :
+		La partie haute (127) = AppId / 65536 | $80.
+		La partie basse est laissee libre a l'app.
+		Pb : les evenements sont determines dynamiquements...
+		
+	void	*GetNextAttribut(AppId id asm("a0"), ATTRIBUT attribut asm("d0") ,void *previous asm("a1"));
+		Retourne un pointeur vers les donnees internes de l'application.
+		Saute le pointeur precedent (recherche d'abord ce ptr puis passe au sauivant).
+		Fait n'importe quoi si on l'appelle en changeant AppId ou attribut par
+		rapport au premier appel a GetFirstAttribut.
+		Retourne un pointeur vers la premiere donnee interne de l'application
+		correspondant au type desire si attribut = ATTR_NULL (previous n'est pas pris en compte alors).
+		
+	AppId	GetNextApp(AppId id asm("a0"))
+		Application suivante ou APP_NULL.
+		Si id == APP_NULL, Retourne la premiere application installe ou APP_NULL
+		
+	void	SendEvent(EventId id asm("d0"), long num asm("d1"), long num2 asm("d2"));
+		Envoie un evenement aux applications installees.
+		
+	void	SendEventToApp(EventId id asm("d0"), long num asm("d1"), long num2 asm("d2"), AppId id asm("a0"));
+		Envoie un evenement a l'application selectionnee.
+		
+	DgId	DoDialog(PDIALOG *pdiag, short x, short y);
+		Affiche une boite de dialogue PedroM. Tres flexible.
+		Structures:
+			typedef struct	{
+				short	LastKey;
+				short	ItemId;
+			} DgId;
+			typedef struct {
+				short	x,y,width,height;
+				short	FastKey;
+				short	Id;
+				char	Attr,Font;
+				void	*Data;
+				char	ItemUp, ItemDown, ItemLeft, ItemRight;
+				short (*select)(WINDOW *w asm("a3"), short x asm("d0"), short y asm("d1"), ITEM *i asm("a4"));
+				short (*unselect)(WINDOW *w asm("a3"), short x asm("d0"), short y asm("d1"), ITEM *i asm("a4"));
+				void  (*Draw)(WINDOW *w, short x, short y, void *data, short width, short height);	
+				DgId	(*DoKey)(short key asm("d3"), ITEM *i("a4"));
+				void	*SubDialog;
+			} ITEM;
+			typedef struct {
+				short	WinFlags;
+				const char *title;
+				short	select, NbrItem;
+				short	width, height;
+				DgId	(*DefaultKey)(short key asm("d3"), ITEM *i asm("a4"));
+				ITEM	ItemsTab[0];
+			} PDIALOG;
+
+	AppId	GetRunningAppId(void);
+		Est-on dans le shell de commande ? Quelle application a les commandes ?
+		etc
+			
+	BOOL	SaveCertificate(short CertId, unsigned short size, const char *data);
+		Sauve les donnees dans la zone Certificat de l'application.
+		Attention ! Chaque ecriture dans cette zone consomme de le memoire flash,
+		memoire que l'on ne peut recuperer qu'en desinstallant l'application !
+		(Une fois ecrit, c'est pour toujours.)
+		Si on ecrit avec un CertId deja utilise, ce nouveau CertId remplace le precedent.
+		Retourne TRUE si ok. FALSE si pas assez de place.
+		Format:
+			ApplicationHeader,
+			Application (Extended Kernel Program), 
+			$0000,$F3,
+			CertificateData, Size.w, CertId.w, 
+			CertificateData, Size.w, CertId.w, 
+			...
+			$FFFF, $FFFF, $FFFF, $FFFF
+		CertId != $Fxxx & $00F3	(Pb alignement: WORD only)
+	
+	BOOL	LoadCertificate(short CertId, const unsigned short *size, const char **data);
+		Charge le pointeur des donnees de type CertId qui se trouve dans la zone 
+		des certificats de l'application.
+		Retourne TRUE si on a trouve cette id, FALSE sinon.
+
+	unsigned long	GetCertificateLength(void);
+		Retourne la taille de la zone des certificats libres de l'application.
+
+
+Fonctions classiques de Tigcc :
+			
+	BOOL	GrayOn(void);
+	void	GrayOff();
+	void	*GrayGetPlane(short plane asm("d0"));
+	int	printf(const char *format, ...);
+	void *kbd_queue (void); 
+	short atoi (const char *str asm("a0")); 
+
+
+Internal Functions (For PpHd use)
+
+AppInit
+	Recherche des applications installées et reservation des handles.
+	Appelle apres FlashCheck.
+	
+AppInstall(HANDLE h, char *name)
+	Installe l'application h qui est en RAM.
+	Appelle automatiquement par la procedure de link si elle reconnait une application.
+		1. Check taille fichier (< 65536-20).
+		2. Check signature (_exit.w, et _exit +6.ll).
+		3. Recherche d'un secteur libre ($FFFF).
+		4. TailleBss = ReadBssSize(h). WriteBssSize(h) = 2
+		5. Rellocation du handle h avec comme destination le secteur trouvé. (Modifie legerement PreOS).
+		6. Remet la vrai taille du segment BSS et fixe le counter de reloc a 3.
+		7. Write Extra Header (Statut = 0FFFE). Folder : apps.
+		8. Write handle h.
+
+AppUninstall(void *addr)
+	Desinstalle l'application.
+		1. Get sector base.
+		2. Check Extra Header
+		3. Verifie que le reloc count de l'application est a 3.
+			Oui:	3' : Met ce reloc count a 0.
+				3'': Appel function event(Uninstall).
+		4. Free BSS Handle.
+		5. FlashErase(Sector)
+
+AppRun(void *addr, int argc, char *argv[])
+	Execute l'application (appelle la fonction _main).
+		1. Get sector base.
+		2. Check Apps
+		3. Saut a main.
+
+AppOpenRessource(void)
+	Ouvre le fichier de ressources si necessaire.
+	Si le fichier est realloue, il est remplis a 0 !
+		1. Pop PC, get sector base.
+		2. Get BSS Handle, Check size 
+		3. Size == 2
+			4. Realloc a sa taille normale.
+			5. Locke it.
+			6. Clean it.
+			7. Realloc des libraries (find_librarie, reloc).
+			8. Copie les adresses des fonctions dans la section BSS.
+		9. Retourne Ptr or NULL.
+	Sinon ne fait qu'un HLock dessus.
+	
+AppCloseRessource(void)
+	Ferme le fichier de ressource.
+		1. Pop PC, get sector base.
+		2. Get BSS Handle, Check size 
+		3. Size != 2
+			4. UnRealloc des libraries (unreloc).
+			5. UnLocke it.
+			6. Realloc a 2.
+		8. Retourne Ptr or NULL.
+
+
+INSTALLED FORMAT (For PpHd use):
+
+	ApplicationHeader:
+		dc.b	$01		; Number of used sectors
+		dc.b	$FE		; Used.
+		ds.b	8		; Folder (= 'apps',0)
+		ds.b	8		; Internal Name of the Application.
+		dc.w	xxxx		; CheckSum.
+	Kernel Program
+		dc.w	xxxx		; Application Size
+		dc.l	'bsr.w Loader'	; Kernel Loader (Unused)
+		ds.b	Kernel Header
+		ds.b	xxx		; Application Code with somewhere _main entry :
+			_main:
+				dc.l	$4E7581AF
+				dc.l	$6D0329BC
+			Attribute Table
+				dc.w	0x0001,Event-AttributeTable
+				dc.w	xxxx
+				dc.w	$FFFF		; End of Attribute Table.
+		dc.w	0000		; AMS Relocation Format (Unused)
+		dc.b	$F3		; ASM Tag
+	Certificate Area
+		CertifcateData.s, Size.w, CertId.w, 
+		CertificateData.s, Size.w, CertId.w, 
+	End Of Sector
+		$FFFF, $FFFF, $FFFF, $FFFF
+
+
+EXAMPLE:
+
+	#define RESSOURCE ex1
+	#include <pedrom.h>
+	
+	// Define Attribute
+	ATTRIBUTS
+			ATTR_MAIN
+			ATTR_END
+
+	// Define main function
+	int	main(int argc, char *argv[])
+	{
+		g = ropen();
+		printf( "Hello world from Application !\n"
+			"Counter: %d", g->counter);
+		g->counter++;
+	}
+
+	
+Comment faire un systeme fenetre pour PedroM ?
+
+	Faire une application principale : le gestionnaire de fenetre.
+	Exemple : Nom de l'appli 'xwin'.
+	(Si c'est trop grand, faire deux applications).
+	L'appli boote par le script 'start' (Ne pas utiliser l'evenement boot).
+	Elle doit donc exporter une commande console : 'start xwin' par exemple.
+	Ca demarre le systeme et lance un systeme de gestion de fenetre.
+	Au demarrage :
+		+ Recherche des applications avec un numero d'attribut fixe a l'avance.
+		=> Ce sont les applications qui nous interressent.
+		for(AppId id = GetFirstApp() ; id != APP_NULL ; id = GetNextApp(id))
+			if (GetFirstAttribut(id, 0x8001) != NULL)
+				AddApp(id);
+	
+	Ces applications exportent des attributs :
+		#define RESSOURCE xapp2
+		#include <pedrom.h>
+		#include <xwin.h>
+		
+		ATTRIBUTS
+			ATTR_IMPORT_TABLE
+			ATTR_EVENT_FUNCTION
+			ATTR_XMAIN
+			ATTR_END
+
+	Elles accedent aux donnees du serveur graphique par un acces a la librarie (xwin). 
+	Fichier: xapp2.res :
+		LIBRARY(xwin,4)
+			IMPORT(void , (void), EventLoop, 0)
+			IMPORT(XWINDOW * , (int, int, int, int), NewWindow, 1)
+			...
+		GLOBAL(AppId, Counter)
+	
+	Puis le code :
+	 void	xmain(void)
+	 	{
+		g = ropen();
+		...
+		XWinAppId = GetAppId("xwin");
+		BaseEvent = GetBaseEvent(XWinAppId);
+		SendEventToApp(BaseEvent+XW_READY, 0, 0, XWinAppId);
+		SendEventToApp(BaseEvent+XW_IDLE, 0, 0, XWinAppId);
+		}		
+	Note: Le ptr des ressources n'est pas valide lors d'une entree de lib (Utiliser ropen).
+	Note: GKeyIn peut installer des applications...
+	Note: On ne peut pas exporter des variables mais seulement des fonctions !
+	
+	ATTR_XMAIN est definie comme suit :
+	#define ATTR_XMAIN	DEF_ATTRIBUT(0x8001, xmain)
+	
+Comment faire un systeme multi-tache pour PedroM ?
+	C'est complique... Impossible proprement actuellement.
+	Je vais essayer d'arranger cela, mais c'est pas gagne.
+	
+Exemple d'application:
+	Veille / Mot de passe / Traitement de texte / Gestionnaire de fenetre
+	OS Extension.
+	

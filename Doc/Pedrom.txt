@@ -1,0 +1,348 @@
+       Title: PedroM
+     Version: 0.71
+ Platform(s): TI-92+, TI-89, V200
+      Author: PpHd
+    Web Site: http://www.timetoteam.fr.st
+      E-Mail: ppelissi@caramail.com
+Release Date: 2003/06/10
+
+---------
+0.Licence
+---------
+
+  PedroM -Open Source ROM for Ti-92+, Ti-89 & V200 systems- 
+  Copyright (C) 2003 PpHd
+  
+  This program is free software ; you can redistribute it and/or modify it under the
+  terms of the GNU General Public License as published by the Free Software Foundation;
+  either version 2 of the License, or (at your option) any later version. 
+  
+  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+  without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+  See the GNU General Public License for more details. 
+  
+  You should have received a copy of the GNU General Public License along with this program;
+  if not, write to the 
+  Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA 
+
+  PedroM uses also some non-GPL extra code which are distribute under their own free licence.
+  Thanks to the authors of theses original programs for letting me distributing it :
+  
+  PreOS -Kernel Extender- Copyright (C) 2002-2003 Patrick Pélissier
+  Side -Text editor- Copyright (c) 2002 Clement Vasseur.
+  Unpack routines and PPG files -Compressed executable files- Copyright (C) 2001-2002 Pasi 'Albert' Ojala & Thomas Nussbaumer
+  ExtGraph Graph Functions -Graphics library- Copyright (C) 2001-2002 Thomas Nussbaumer
+  MD5 -implementation of MD5 algos- Copyright (C) 1999, 2000, 2002 Aladdin Enterprises.
+  TIB Receiver 1.20 for TI-89 and TI-92 Plus - Copyright (c) 2000-2001 Julien Muchembled. All rights reserved.
+
+--------------
+I.Introduction
+--------------
+
+	PedroM is my personnal attempt to create a complete new ROM, without using any code from AMS. The goal is to make a real ROM (ie useable on real Ti-92+ calcs) which can run safely 95% of the assembly programs designed for AMS 1.01. So that, I was obbliged to rewrite many romcalls of original AMS. My spirit when I rewrote theses romcalls was not to create faster functions (It is useless), even if they are quite often faster, but to create a small ROM : only 192K reserved for the system (64K for the boot, 16K reserved by the hardware, 48K+64K for PedroM itself). As a consequence, you have plenty of memory available ( 228 Kbytes of RAM and 1900 Kbytes of FLASH). Of course, this ROM set the hardware protection (in RAM and in ROM) off on both hardware. But all the assembly programs use either self modifiyng code, or data in code segment. So only the PedroM designed programs will be able to be executed in ROM. AMS Flash Application won't be supported.
+	
+	The Ti link protocol is not complete : you can't send a Product Code. Sending/Receiving files work fine with Ti-GraphLink.
+
+	PedroM has a modified version of PreOS core as built-in, so you don't need to install a kernel. It uses the latest version of PreOS. PedroM can also run natively PPG programs (See http://tict.ticalc.org for more infos about PPG programs). In conclusion, you can run at the moment :
+		- Nostub Programs.
+		- Kernel Programs (version 2, 3, 4 & 5) -See "Kernel History" in PreOS.txt.
+		- PPG Programs.
+		- Pack Archive Programs.
+	Kernel v1 programs can be converted using 'ck1tok2' program to kernel v2 so you can even use kernel v1 with PedroM (Sorbo Quest ! Lovely.) (on HW1).
+	
+	Many romcalls have been rewritten (>400). Many games will work. Some shells 'work' (Sh'l, tictex, pct, doors) but einstein can't be run because of AMS version too high. TSR programs won't work since EV-hook doesn't work (In fact, EV_hook works but there is no AMS like application installed, so it does nothing). PedroM is detected as AMS 1.01 by nostub programs but kernel programs will detect AMS 1.48.
+	'stdlib' is also a built-in library (But you can update it !)
+	
+	By the way, there are plenty of bugs left !
+
+--------------------------
+II.The command line prompt
+--------------------------
+
+	Contrary to AMS, PedroM looks like a lot a unix shell (even if it is very different).
+	You can receive any files (sent throught the link port) in this shell.
+	
+	SPECIAL KEY LIST:
+		ENTER:	
+			You enter a command in the line prompt, and you finish by pressing ENTER to execute it.
+		UP/DOWN:
+			There is also an history of the last used commands. Press Up/Down to select a previous command (Max 10 commands).
+		ON:	
+			Auto completion of the current command.
+			It will search in the internal commands, in the folders and in the files of the path.
+			If there are more than one command which can complete the line, it will put as much char as possible, and it won't put the final char (' ' or '\').
+		F1-F8:
+			Paste the memorised command (using setfkey).
+			See dispfkey for the list of the shortcuts.
+		ON-ESC:
+			Reset the system.
+			
+	There are 4 kinds of command :
+	
+	A - INTERNAL COMMANDS :	
+
+	They are built-in commands :
+
+	+ 'help'	: display all the internal commands.
+	+ 'cls'		: Clear the screen.
+	+ 'clean'	: Clean the system (Unrealloc Kernel files, delete Twin Files, and free all handles which are not in the VAT). May crash if the VAT is corrupted (Reset).
+	+ 'reset'	: Reset PedroM (Archive won't be lost).
+	+ 'install product code' : Install a new Product Code using the Boot code (ie reinstall AMS). This command isn't fully displayed in the help. The Product Code must be signed since it used the BOOT Code.
+	+ 'install tib' : Install a new Product Code. This command isn't fully displayed in the help. The Product Code can be not signed since it used its own function. You can only upgrade PedroM using this function.
+	+ 'cd'		: Change the current directory.
+			Ex: cd toto
+	+ 'arc' 	: archive a file.
+			Ex: arc sma
+	+ 'unarc'	: unarchive a file.
+			Ex: unarc sma
+	+ 'ls'		: List the current directory. Options : 
+			'-l' : to have some details.
+			'-h' : to see the 'home' directory.
+	+ 'mem'		: Display the remaining memory.
+			Ex: mem
+	+ 'mkdir'	: Create a new directory.
+			Ex: mkdir toto
+	+ 'rmdir'	: Delete a directory. All the files in the directory are deleted.
+			Ex: rmdir toto
+	+ 'rm'		: Delete a file.
+			Ex: rm temp
+	+ 'mv'		: Move/Rename a file (SrcName DestName).
+			Ex: mv tictex shell
+	+ 'cp'		: Copy a file (Srcname DestName).
+			Ex: cp main\tictex system\shell
+	+ 'sendcalc'	: Send a file to another calc. Works even with AMS calcs !
+			Ex: sendcalc tictex
+	+ 'getcalc'	: Get a file from another calc. Works even with AMS calcs !
+			Ex: getcalc tictex
+	+ 'setfkey'	: Set the corresponding string for a Function Key.
+			Ex: 'setfkey 1 stdlib' : When you press F1, "stdlib" is pushed instead.
+			Ex: 'setfkey 2 "ls -l$"' : With F2, "ls -l" is executed.
+	+ 'dispfkey'	: Display all the FunctionKeys.
+			Ex: dispfkey
+	+ 'setapd'	: Set the current value for the Auto Power Down timer (in seconds). Valid values are from 10 to 1000 (Other values won't be accepted).
+			Ex: setapd 60
+	+ 'echo'	: Display the string (Very usefull with scripts).
+			Ex: echo "Hello world !"
+	+ 'setpath'	: Set the current PATH. If a file is not found inside the current (and if there isn't any given folder), it will search in the path.
+			Ex: setpath bin compil cf
+	+ 'unppg'	: Extract a PPG file and add the extracted program to the VAT.
+			Ex: unppg db92ppg db92
+	+ 'side'	: Starts SIDE (Built-in application). It may be put as an external application in later releases (When the support of PedroM app is done).
+		It is a text editor. Here are the keys :
+		  [2nd]+[LEFT]	: jump to beginning of line
+		  [2nd]+[RIGHT]	: jump to end of line
+		  [<>]+[LEFT]	: Next left word
+		  [<>]+[RIGHT]	: Next right word
+		  [2nd]+[UP]	: page up
+		  [2nd]+[DOWN]: page down
+		  [<>]+[UP]: jump to first line
+		  [<>]+[DOWN]: jump to last line
+		  [SHIFT] + arrow keys: select text
+		  [CLEAR]: clear to end of line
+		  [2nd]+[CHAR]: characters table
+		  [APPS]: Display secondary screen (See config)
+		  [ESC]: close file and prompt for a new one
+		  [2nd]+[QUIT]: exit
+		  [2nd]+[OFF] or [<>]+[ON]: power off
+		  [<>]+[x] : cut
+		  [<>]+[c](Ti-92+) OR [<>]+[y](Ti-89): copy
+		  [<>]+[v](Ti-92+) OR [<>]+[z](Ti-89): paste
+		  F1 - Build - save the file and launch the compiler.
+		  F2 - Exec - save the file and executes the compiled program.
+	 	  F3 - Goto - go to the given line
+		  F4 - Find - prompt for a string to be searched for
+		  F5 - Replace - prompt for a string to be replaced for
+		  F6 - Config - open the config screen
+		  F7 - About - show the about screen
+		-- Config --
+		Build: name of the program that runs with F1 (build) '!' is the text filename.
+		Exec: name of the program that runs with F2 (Exec) '!' is the text filename.
+		2nd text: name of the text file to open with APPS.
+		Auto insert closing brackets: Yes/No
+		Auto indent: insert spaces when [ENTER] is pressed
+		Key repeat delay and rate let you configure the cursor speed. 
+
+	Wildcards '*' and '?' are supported for the extra arguments : use 'arc *lib' to archive all the libraries.
+
+	There are also extra commands I have added only for debugging reasons :
+	
+	+ 'hexdump'	: Do a dump of the memory. Usefull for debugging.
+			Ex: hexdump 0x400000
+	+ 'linksend'	: Send some bytes throuht the Link Port.
+			Ex: "send 0x88876300"	:)
+	+ 'linkdump'	: Do a dump of the link receive port. Press Break key to stop dumping.
+			Ex: linkdump
+			
+	B - PROGRAMS :
+
+	If you want to run a program (designed for PedroM or AMS), just enter its name, and press ENTER.
+	It cans run ASM programs (_nostub, kernel or Pack Archive) directly.
+	You don't need to install a kernel (By the way, no kernel can be installed !)
+	It cans also run the PPG directly (It supports them natively). So you can avoid the launcher.
+
+	TIP: Put a Break Point at the end of EX_patch to trace your program. 
+			
+	C - CALCULATOR
+	
+	Even if PedroM isn't designed to be a calculator, it would be quite annoying if you can't do any calcul with it. So you can enter a math calcul in the command line prompt, and it evaluates it :
+	Example:
+		2+2
+		2E145*145
+		-1452.3		("ans - 1452.3")
+		1452.23*256.32->x
+		x*25.236->y
+		x
+		y
+		1->x
+		y
+		1+x->x
+		x
+	For the moment, only + / * - -> are defined (and external fonctions).
+	As a consequence, you can call a program like with AMS : 
+		"shl()" will work, and will return a random float.
+	NOTE(1): "tictex()" won't work since it doesn't create a twin entry.
+	NOTE(2): 1st argument of STORE operator is NOT evaluated when it is storing in the variable. So, "1+x->x" is invalid since it does a circular definition (even if x has a value). And, for "1+x->y", if you change x, you will change y too.
+	NOTE(3): If an error arrived, some variables may be locked (ie can't be interpreted). You can unlock them by calling 'clean'.
+	NOTE(4): Func arg '25*x->f(x)' is not yet supported.	
+
+	D - Script
+		
+		A script is a text file which contains a list of commands to execute.
+		The first line must be "!PedroM". All lines which begins with ' are comments.
+		Other lines are command.
+		A special script is launched when PedroM starts: the script whose name is 'start'.
+		
+----------------
+III.Installation
+----------------
+
+	I don't want to explain how to send a non-certified TIB to a Ti-92+. It may be be dangerous, and you may dommage your calc : unexperiment users may do dangerous things. You can nevertheless test PedroM on VTi.
+	The only thing I can say is that it works fine on my TI-92+ HW1, on some Ti-92+ HW2, and on some Ti-89 HW2.
+
+----------------
+IV.Build PedroM
+----------------
+
+	1. You need to have :
+		+ PedroM sources (In the archive).  (See http://www.timetoteam.fr.st).
+		+ a68k 2.73.f3k-pre1 (at least) (In the archive).  (See http://tigcc.ticalc.org).
+		+ maketib (In the archive). (See http://www.timetoteam.fr.st).
+		+ ttstrip v1.04 (at least) (See http://tict.ticalc.org).
+		+ PreOS v0.65 sources (See http://www.timetoteam.fr.st).
+		+ 'stdlib.9xz' (In PreOS archive). (See http://www.timetoteam.fr.st).
+		
+	2. If you don't have a WINDOWS/DOS Operating System, I assume you can recompile the necessary programs to your system.
+	
+	3. Compile PedroM :
+		a. Go to the PedroM folder.
+		b. Extract the bin file from 'stdlib.9xz' :
+			ttstrip ..\Preos\stdlib.9xz stdlib.bin
+		c. Assemble PedroM :
+			a68k -t -i..\Preos\Src -iS pedrom.asm
+		where "..\Preos\Src" is the directory of the sources of PreOS.
+		d. Create the TIB :
+			maketib pedrom.o
+	Or use directly the script 'make.bat'. It assumes the directories are like :
+		+PedroM +
+		|	|Doc
+		|	|S
+		|
+		+PreOS  +
+			|Doc
+			|Src
+	(ie you have extracted PedroM.bz2 and Preos.zip inside a common folder).
+	
+
+--------------
+V.Boot & Reset
+--------------
+
+	In PedroM, there are 2 kinds of reset :
+		+ soft reset which doesn't destroy your RAM : 'Address Error', 'Protected Memory', ... do such kind of reset. I recommended highly to do a 'clean' command before continuing. PedroM can't do it itself because this command may crash the calculator.
+		+ hard reset : the RAM is totally reset. Only the archive files are kept.
+
+	If you press ON during the end of the booting process (between the black screen and the white screen), PedroM will do a hard reset which doesn't start the script 'start'. Do no kept ON pressed during the second reset, otherwise, it will do a 3rd reset, and so on.
+		
+-----------
+VI.To Do...
+-----------
+
+	+ Debug (a)sin(h)/(a)cos(h)/(a)tan(h)/ln/exp/pow functions. The results are quite awesome...
+	+ Graphs
+	+ Finish the 89 version (Some graphical problems remain (ls, help).
+	
+-------
+VII.FAQ
+-------
+
+Q: How can I send PedroM to my calc ?
+A: The only thing I will say is that you have to look for a program which can receive a TIB.
+
+Q: Is there a V200 version ? 
+A: The V200 version should work (compile the sources with V200 flag), but you can't send a non-certified TIB to a V200. So it is useless.
+   Moreover the V200 doesn't work on VTI since it doesn't really support them.
+
+Q: Why should I use PedroM instead of AMS ?
+A: For 3 main reasons : 
+	+ PedroM is open-source.
+	+ There is plenty memory free (Both Flash and RAM).
+	+ There are less dramatical bugs than AMS (ie you can't overpass the Hardware Protection by software.).
+
+Q: Why should I use AMS instead of PedroM ?
+A: For 3 main reasons : 
+	+ You use your calculator for Math.
+	+ AMS is less buggy.
+	+ AMS is the reference : it should be compatible with all programs.
+
+Q: Is there a Window Like environnement ?
+A: Some window'like environnements are being developped for PedroM.
+
+Q: Some programs don't work under PedroM. A program tells me 'Romcall xxx not available'. What can I do ?
+A: Nothing. Just report me the program, and maybe I can fix it.
+
+Q: Some programs crash under PedroM. What can I do ?
+A: Report me the program. If it is a kernel program, it is certainly a bug in PedroM. PedroM should be compatible with all kernel programs (on HW1, at least)... If you have a HW2, you may have some problems with GrayScales with old programs. TiGb can't be run because it uses a dirty hack to get a 70K page.
+
+Q: A program crashes, and I can't run it anymore. Or, the calculator don't have any memory left.
+A: Call 'clean' command. Then retry it. If it crashes again, it has been corrupted. Resend it to PedroM.
+
+Q: I change the batteries, and PedroM resets.
+A: Yes. I don't have written the code for avoiding this !
+
+Q: I can't install unios/preos/doorsos/teos !
+A: There is already a kernel in PedroM ! You don't need to install a new one. Moreover kernels use many dirty hacks which are not compatible with PedroM.
+
+Q: What is 'stdlib' ? 
+A: Lock at PreOS documentation.
+
+Q: Why don't you do a multi-tasking OS ? Why not Linux ?
+A: I personnaly think that if you want to do a multi-tasking OS, you should have at least a MMU to protect the tasks. Ti-92+ doesn't have a MMU, so a single-tasting OS is more suitable. Install Prosit if you still want such a program.
+
+Q: I send a file and it seems to work fine, but when I list the files, I can't see it.
+A: Check if the file hasn't been added to another folder.
+
+Q: Why a TIB and not a 9xu ?
+A: 9xu files have some secrets I don't know. I know the format of the TIB files enought to create a good TIB.
+
+Q: I have a lot of problems with the Link !
+A: Indeed, there are some remaining problems with the link protocol.
+ Try using another link program (Like send92p by Rusty).
+ The last version of TiGl does a lot of checking.
+
+Q: Your program is awesome. I want to pay for it.
+A: No problem. Send donation to smeeter@caramail.com (PayPal).
+
+-------------------
+VIII.Special Thanks
+-------------------
+	
+	- Johan  <johei804@student.liu.se> for his precious hardware doc.
+	- Rusty Wagner <river@gte.net> for Vti emulator.
+	- Zeljko Juric <Zeljko@tigcc.ticalc.org> for tigcclib.
+	- Julien Muchembled <Julien.Muchembled@netcourrier.com> for his tools.
+	- Olivier Armand (ExtendeD) <ola.e-ml@wanadoo.fr> for checking (often!) my code.
+	- WORMHOLE <ti_crackers@hotmail.com> for OpenOS.
+	- Thomas Nussbaumer <thomas.nussbaumer@gmx.net at http://tict.ticalc.org> for the PPG extract function and the original Bitmap functions.
+	- Clement Vasseur <nitro@epita.fr> for Side (Built-in editor).
+	- Rage2000, liquid, godzil & Bihi for their tests on HW2.
+	 
